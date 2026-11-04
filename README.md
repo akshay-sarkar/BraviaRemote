@@ -2,12 +2,13 @@
 
 # Bravia Remote
 
-**A native SwiftUI Wi‑Fi remote for Sony BRAVIA Google TVs. It comes with four poster themes.**
+**A free, open‑source iPhone remote for Sony BRAVIA Google TVs. It works over Wi‑Fi with no IR blaster, no account and no ads, and you can pick from four poster themes.**
 
 [![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-black?logo=apple)](#requirements)
 [![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)](#build-from-source)
 [![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0A84FF)](#architecture)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-success)](#architecture)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Download](https://img.shields.io/badge/download-latest%20IPA-F5C518?logo=github&logoColor=black)](../../releases/latest)
 
 <br>
@@ -31,6 +32,8 @@
 - [Architecture](#architecture)
 - [Sony REST API reference](#sony-rest-api-reference)
 - [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 - [Disclaimer](#disclaimer)
 
 ---
@@ -208,6 +211,20 @@ Turn on **Remote Start**. If the TV is fully powered off with Remote Start disab
 
 Open **⋯ → More keys & settings → Forget this TV**, then pair again.
 </details>
+
+## Contributing
+
+Contributions are welcome! Bug fixes, new themes, support for more BRAVIA models and translations are all appreciated.
+
+1. Fork the repo and create a branch: `git checkout -b feature/my-idea`
+2. Keep the app dependency‑free and follow the existing SwiftUI style.
+3. Open a pull request. CI builds an IPA for every push, so you can test it on a device.
+
+Found a bug or have an idea? [Open an issue](../../issues).
+
+## License
+
+Released under the [MIT License](LICENSE): free to use, modify and share, for personal or commercial projects.
 
 ## Disclaimer
 

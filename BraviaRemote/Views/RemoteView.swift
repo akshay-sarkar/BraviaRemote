@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// Main screen. Mirrors the physical BRAVIA voice remote (RMF-TX series) key for key, top to bottom:
+/// Main screen. All four themes share one layout. Controls sit low in thumb reach,
+/// and the poster shows through at the top.
 ///
-///   [name/status]          [⋯] [⏻]
-///   TV                         ⚙︎
-///   Input                      123
-///          ( D-pad + OK )
-///   Back                      Home
-///   VOL±     Assistant/Mute    CH±
-///   Play       Pause         Guide
-///   YouTube           Netflix
-///   Disney+           Prime Video
+///   [name/status]                 [⋯] [⏻]
+///   (poster)
+///   TV      Input     Settings     123
+///   VOL±   ( D-pad + OK )          CH±
+///   Back    Voice     Mute        Home
+///   Play         Pause           Guide
 struct RemoteView: View {
     @EnvironmentObject private var vm: RemoteViewModel
+    @Environment(\.appTheme) private var theme
+    @AppStorage(AppTheme.storageKey) private var themeRaw = AppTheme.default.rawValue
     @State private var sheet: Sheet?
 
     enum Sheet: String, Identifiable {
@@ -20,25 +20,26 @@ struct RemoteView: View {
         var id: String { rawValue }
     }
 
-    /// Natural height of the layout; smaller screens scale the whole remote down to fit.
-    private let designHeight: CGFloat = 770
+    /// Smallest height the layout needs; shorter screens scale the whole remote down.
+    private let minimumHeight: CGFloat = 590
 
     var body: some View {
         GeometryReader { geo in
-            let scale = min(1, geo.size.height / designHeight)
-            content
-                .frame(width: geo.size.width / scale, height: geo.size.height / scale)
+            let scale = min(1, geo.size.height / minimumHeight)
+            let width = geo.size.width / scale
+            content(width: width)
+                .frame(width: width, height: geo.size.height / scale)
                 .scaleEffect(scale)
                 .frame(width: geo.size.width, height: geo.size.height)
         }
-        .padding(.vertical, 4)
-        .background(Theme.background.ignoresSafeArea())
+        .background(PosterBackground())
         .overlay(alignment: .top) {
             if let toast = vm.toast {
                 ToastView(text: toast).padding(.top, 4)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: vm.toast)
+        .animation(.easeInOut(duration: 0.35), value: themeRaw)
         .sheet(item: $sheet) { sheet in
             switch sheet {
             case .apps: AppsView()
@@ -50,145 +51,124 @@ struct RemoteView: View {
         .onAppear { vm.refresh() }
     }
 
-    private var content: some View {
-        VStack(spacing: 0) {
+    private func content(width: CGFloat) -> some View {
+        let rockerWidth: CGFloat = 58
+        let dpadSize = min(width - 32 - rockerWidth * 2 - 16, 290)
+
+        return VStack(spacing: 0) {
             header
-            gap
-            sideKeys(left: tvKey, right: key(.actionMenu, "Settings") { KeyCap(systemImage: "gearshape.fill") })
-            gap
-            sideKeys(left: key(.input, "Input") { GlyphKey(shape: InputGlyph()) },
-                     right: RemoteButton("Number pad", action: { sheet = .numbers }) { TextKey(text: "123") })
-            gap
-            DPadView { vm.press($0) }
-                .frame(width: 228, height: 228)
-            gap
-            sideKeys(left: key(.back, "Back") { KeyCap(systemImage: "arrow.uturn.backward") },
-                     right: key(.home, "Home") { KeyCap(systemImage: "house.fill") })
-            gap
-            rockerRow
-            gap
-            mediaRow
-            gap
-            appRows
+            Spacer(minLength: 12)
+            VStack(spacing: 16) {
+                HStack(spacing: 10) {
+                    key(.tv, "TV") { Text("TV").font(.system(size: 17, weight: .bold, design: .rounded)) }
+                    key(.input, "Input") { glyph(InputGlyph()) }
+                    key(.actionMenu, "Settings", accent: true) {
+                        Image(systemName: "gearshape.fill").font(.system(size: 20, weight: .semibold))
+                    }
+                    RemoteButton("Number pad", action: { sheet = .numbers }) {
+                        ThemedKey { Text("123").font(.system(size: 17, weight: .bold, design: .rounded)) }
+                    }
+                }
+
+                HStack(spacing: 0) {
+                    ThemedRocker(title: "Volume", isChannel: false, height: dpadSize + 12,
+                                 onUp: { vm.press(.volumeUp) }, onDown: { vm.press(.volumeDown) }) {
+                        VolumeWedge().stroke(lineWidth: 1.6).frame(width: 18, height: 11)
+                    }
+                    Spacer(minLength: 8)
+                    ThemedDPad(size: dpadSize) { vm.press($0) }
+                    Spacer(minLength: 8)
+                    ThemedRocker(title: "Channel", isChannel: true, height: dpadSize + 12,
+                                 onUp: { vm.press(.channelUp) }, onDown: { vm.press(.channelDown) }) {
+                        Text("CH").font(.system(size: 12, weight: .heavy)).tracking(1)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    key(.back, "Back") { symbol("arrow.uturn.backward") }
+                    RemoteButton("Voice search", action: { sheet = .voice }) {
+                        ThemedKey(accent: true) { symbol("mic.fill") }
+                    }
+                    key(.mute, "Mute") { symbol("speaker.slash.fill") }
+                    key(.home, "Home") { symbol("house.fill") }
+                }
+
+                HStack(spacing: 10) {
+                    key(.play, "Play", accent: true, height: 58, compact: false) { symbol("play.fill", size: 17) }
+                    key(.pause, "Pause", accent: true, height: 58, compact: false) { symbol("pause.fill", size: 17) }
+                    key(.guide, "Guide", height: 58, compact: false) { glyph(GuideGlyph(), size: 23) }
+                }
+            }
         }
-        .padding(.horizontal, 26)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 10)
     }
 
-    private var gap: some View { Spacer(minLength: 8) }
-
-    // MARK: - Rows
+    // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(vm.tvName).font(.headline).lineLimit(1)
-                Text(statusText).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(statusText).font(.caption).opacity(0.75).lineLimit(1)
             }
+            .shadow(color: .black.opacity(0.6), radius: 6)
             Spacer()
             Menu {
-                Button { sheet = .apps } label: { Label("All apps", systemImage: "square.grid.2x2") }
-                Button { sheet = .voice } label: { Label("Type on TV", systemImage: "keyboard") }
-                Button { sheet = .settings } label: { Label("More keys & settings", systemImage: "ellipsis.circle") }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 40, height: 40)
-            }
-            .accessibilityLabel("More")
-            RemoteButton("Power", action: { vm.togglePower() }) {
-                KeyCap(systemImage: "power", tint: Theme.power)
-            }
-        }
-    }
-
-    private var tvKey: some View {
-        key(.tv, "TV") { TextKey(text: "TV") }
-    }
-
-    private var rockerRow: some View {
-        HStack(alignment: .center) {
-            RockerView(title: "Volume",
-                       onUp: { vm.press(.volumeUp) },
-                       onDown: { vm.press(.volumeDown) }) {
-                VolumeWedge().stroke(.white.opacity(0.85), lineWidth: 1.6).frame(width: 18, height: 11)
-            }
-            Spacer()
-            VStack(spacing: 14) {
-                VStack(spacing: 6) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                    RemoteButton("Voice search", action: { sheet = .voice }) {
-                        KeyCap(systemImage: "waveform", size: 52)
+                Picker("Theme", systemImage: "paintpalette", selection: $themeRaw) {
+                    ForEach(AppTheme.allCases) { theme in
+                        Label(theme.name, systemImage: theme.symbol).tag(theme.rawValue)
                     }
                 }
-                key(.mute, "Mute") { KeyCap(systemImage: "speaker.slash") }
+                .pickerStyle(.menu)
+                Divider()
+                Button { sheet = .apps } label: { Label("All apps", systemImage: "square.grid.2x2") }
+                Button { sheet = .voice } label: { Label("Type on TV", systemImage: "keyboard") }
+                Button { sheet = .settings } label: { Label("More keys & settings", systemImage: "gearshape") }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(.ultraThinMaterial))
             }
-            Spacer()
-            RockerView(title: "Channel",
-                       onUp: { vm.press(.channelUp) },
-                       onDown: { vm.press(.channelDown) }) {
-                Text("CH").font(.system(size: 13, weight: .bold))
-            }
+            .accessibilityLabel("More")
+            RemoteButton("Power", action: { vm.togglePower() }) { PowerKey() }
         }
-    }
-
-    private var mediaRow: some View {
-        HStack {
-            key(.play, "Play") { KeyCap(systemImage: "play.fill") }
-                .frame(width: 60)
-            Spacer()
-            key(.pause, "Pause") { KeyCap(systemImage: "pause.fill") }
-            Spacer()
-            key(.guide, "Guide") { GlyphKey(shape: GuideGlyph()) }
-                .frame(width: 60)
-        }
-    }
-
-    private var appRows: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                appKey(.youtube)
-                appKey(.netflix)
-            }
-            HStack(spacing: 10) {
-                appKey(.disney)
-                appKey(.prime)
-            }
-        }
+        .frame(height: 50)
     }
 
     // MARK: - Helpers
 
-    private func sideKeys<L: View, R: View>(left: L, right: R) -> some View {
-        HStack {
-            left
-            Spacer()
-            right
-        }
-    }
-
     private func key<Face: View>(_ remoteKey: RemoteKey,
                                  _ label: String,
-                                 repeats: Bool = false,
+                                 accent: Bool = false,
+                                 height: CGFloat = 64,
+                                 compact: Bool = true,
                                  @ViewBuilder face: () -> Face) -> some View {
-        RemoteButton(label, repeats: repeats, action: { vm.press(remoteKey) }, label: face)
+        RemoteButton(label, action: { vm.press(remoteKey) }) {
+            ThemedKey(height: height, accent: accent, compact: compact, content: face)
+        }
     }
 
-    private func appKey(_ shortcut: AppShortcut) -> some View {
-        RemoteButton(shortcut.rawValue, action: { vm.open(shortcut) }) {
-            AppKey(title: shortcut.rawValue)
-        }
+    private func symbol(_ name: String, size: CGFloat = 20) -> some View {
+        Image(systemName: name).font(.system(size: size, weight: .semibold))
+    }
+
+    private func glyph<S: Shape>(_ shape: S, size: CGFloat = 22) -> some View {
+        shape
+            .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            .frame(width: size, height: size)
     }
 
     private var statusColor: Color {
         switch (vm.isReachable, vm.isOn) {
         case (.some(false), _): return .red
-        case (.some(true), .some(true)): return .green
+        case (.some(true), .some(true)): return theme.accent
         case (.some(true), .some(false)): return .orange
         default: return .gray
         }

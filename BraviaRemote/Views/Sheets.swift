@@ -213,6 +213,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Theme") {
+                    ThemeGrid()
+                }
                 Section("TV") {
                     LabeledContent("Name", value: vm.tvName)
                     LabeledContent("IP address", value: vm.host)

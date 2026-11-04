@@ -5,12 +5,12 @@ A native SwiftUI remote for Sony BRAVIA TVs on the 2021 **VH21** Google TV platf
 ## Features
 - Finds the TV automatically with Bonjour (`_googlecast._tcp`). You can also type the IP address.
 - Pairs with a 4‑digit PIN or the TV's Pre‑Shared Key (IP control). The auth cookie and PIN are kept in the Keychain, and the cookie renews itself when it expires (about every 14 days).
-- The main screen has the same keys, in the same order, as the physical BRAVIA voice remote:
-  Power · TV · Settings · Input · 123 · D‑pad/OK · Back · Home · VOL± · Voice · Mute · CH± · Play · Pause · Guide · YouTube · Netflix · Disney+ · Prime Video
+- **4 themes** with original poster backgrounds: Aurora Graphite, Midnight Signal, Crimson Night and Banana Lab. Switch themes from the **⋯ → Theme** menu or in Settings. Your choice is remembered.
+- Main screen: Power · TV · Input · Settings · 123 · VOL± / D‑pad + OK / CH± · Back · Voice · Mute · Home · Play · Pause · Guide. The keys sit low, within thumb reach, and the poster shows at the top.
 - The arrows and the volume and channel keys repeat while you hold them.
 - The Voice key opens a box that sends text to the TV's search. Tap the iPhone keyboard's 🎤 to dictate.
 - 123 opens a number pad with Guide, Info and the color keys.
-- The app keys open the installed app by name. Netflix and YouTube also fall back to Sony's dedicated keys.
+- Apps open from **⋯ → All apps**. That screen has quick buttons for YouTube, Netflix, Disney+ and Prime Video.
 - The ⋯ menu has the full app list and extra keys the physical remote doesn't have (rewind, fast‑forward, stop, subtitles…).
 - Gets the TV's own button codes on connect, and uses the standard Sony codes if that fails
 - Haptics, dark UI, and VoiceOver labels
@@ -45,7 +45,8 @@ BraviaRemote/
    ├─ RemoteView.swift          Main remote
    ├─ SetupView.swift           Discovery, IP entry, PIN pairing
    ├─ Sheets.swift              Apps, Keyboard, Number pad, Settings
-   ├─ Components.swift          RemoteButton (press/repeat), keys, Rocker, DPad
+   ├─ Theme.swift               AppTheme tokens, poster background, themed keys/rockers/D-pad, theme picker
+   ├─ Components.swift          RemoteButton (press/repeat), shared key views, toast
    └─ RemoteIcons.swift         Custom glyphs: Input, Guide, volume wedge, OK cross-hair
 ```
 

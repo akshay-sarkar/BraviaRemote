@@ -101,35 +101,6 @@ struct KeyCap: View {
     }
 }
 
-/// Round key with printed text ("TV", "123").
-struct TextKey: View {
-    let text: String
-    var size: CGFloat = 50
-
-    var body: some View {
-        RoundKey(size: size) {
-            Text(text)
-                .font(.system(size: size * 0.3, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.7)
-        }
-    }
-}
-
-/// Round key with a custom stroked glyph.
-struct GlyphKey<S: Shape>: View {
-    let shape: S
-    var size: CGFloat = 50
-    var glyphSize: CGFloat = 22
-
-    var body: some View {
-        RoundKey(size: size) {
-            shape
-                .stroke(.white, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                .frame(width: glyphSize, height: glyphSize)
-        }
-    }
-}
-
 /// Capsule app button (YouTube / Netflix / Disney+ / Prime Video row).
 struct AppKey: View {
     let title: String
@@ -144,88 +115,6 @@ struct AppKey: View {
             .frame(maxWidth: .infinity, minHeight: 38)
             .background(Capsule().fill(Theme.key))
             .overlay(Capsule().stroke(Theme.keyStroke, lineWidth: 1))
-    }
-}
-
-/// Vertical + / − rocker for volume and channel, with the remote's printed centre mark.
-struct RockerView<Mark: View>: View {
-    let title: String
-    let onUp: () -> Void
-    let onDown: () -> Void
-    private let mark: Mark
-
-    init(title: String,
-         onUp: @escaping () -> Void,
-         onDown: @escaping () -> Void,
-         @ViewBuilder mark: () -> Mark) {
-        self.title = title
-        self.onUp = onUp
-        self.onDown = onDown
-        self.mark = mark()
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            RemoteButton("\(title) up", repeats: true, action: onUp) {
-                Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .medium))
-                    .frame(width: 60, height: 54)
-            }
-            mark
-                .frame(height: 16)
-                .foregroundStyle(.white.opacity(0.85))
-            RemoteButton("\(title) down", repeats: true, action: onDown) {
-                Image(systemName: "minus")
-                    .font(.system(size: 22, weight: .medium))
-                    .frame(width: 60, height: 54)
-            }
-        }
-        .padding(.vertical, 2)
-        .background(Capsule().fill(Theme.key))
-        .overlay(Capsule().stroke(Theme.keyStroke, lineWidth: 1))
-    }
-}
-
-/// D-pad ring with small arrow triangles and a cross-hair OK key, like the BRAVIA remote.
-struct DPadView: View {
-    let onKey: (RemoteKey) -> Void
-
-    var body: some View {
-        GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height)
-            let offset = size * 0.37
-            ZStack {
-                Circle()
-                    .fill(RadialGradient(colors: [Color.white.opacity(0.11), Color.white.opacity(0.06)],
-                                         center: .center, startRadius: 0, endRadius: size / 2))
-                Circle().stroke(Color.white.opacity(0.14), lineWidth: 1.5)
-
-                arrow("arrowtriangle.up.fill", .up, "Up").offset(y: -offset)
-                arrow("arrowtriangle.down.fill", .down, "Down").offset(y: offset)
-                arrow("arrowtriangle.left.fill", .left, "Left").offset(x: -offset)
-                arrow("arrowtriangle.right.fill", .right, "Right").offset(x: offset)
-
-                RemoteButton("OK", action: { onKey(.confirm) }) {
-                    Circle()
-                        .fill(Color(white: 0.16))
-                        .overlay(Circle().stroke(Color.white.opacity(0.16), lineWidth: 1.5))
-                        .overlay(ConfirmGlyph().frame(width: size * 0.13, height: size * 0.13))
-                        .frame(width: size * 0.46, height: size * 0.46)
-                }
-            }
-            .frame(width: size, height: size)
-            .position(x: geo.size.width / 2, y: geo.size.height / 2)
-        }
-        .aspectRatio(1, contentMode: .fit)
-    }
-
-    private func arrow(_ icon: String, _ key: RemoteKey, _ label: String) -> some View {
-        RemoteButton(label, repeats: true, action: { onKey(key) }) {
-            Image(systemName: icon)
-                .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(width: 64, height: 56)
-        }
     }
 }
 

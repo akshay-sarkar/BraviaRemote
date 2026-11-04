@@ -4,8 +4,16 @@ struct SetupView: View {
     @EnvironmentObject private var vm: RemoteViewModel
     @StateObject private var discovery = TVDiscovery()
 
+    enum AuthMethod: String, CaseIterable, Identifiable {
+        case pin = "PIN code"
+        case psk = "Pre-Shared Key"
+        var id: String { rawValue }
+    }
+
     @State private var host = ""
     @State private var selectedName: String?
+    @State private var method: AuthMethod = .pin
+    @State private var psk = ""
     @State private var pin = ""
     @State private var awaitingPIN = false
     @State private var working = false
@@ -17,6 +25,7 @@ struct SetupView: View {
             Form {
                 if awaitingPIN {
                     pinSection
+                    noPinSection
                 } else {
                     discoverySection
                     manualSection
@@ -61,7 +70,7 @@ struct SetupView: View {
             }
             ForEach(discovery.tvs) { tv in
                 Button {
-                    Task { await connect(to: tv) }
+                    Task { await select(tv) }
                 } label: {
                     HStack {
                         Image(systemName: "tv")
@@ -89,28 +98,43 @@ struct SetupView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.go)
-                .onSubmit { Task { await requestPIN() } }
-            Button("Connect") { Task { await requestPIN() } }
-                .disabled(host.isEmpty)
+                .onSubmit { Task { await connect() } }
+
+            Picker("Sign in with", selection: $method) {
+                ForEach(AuthMethod.allCases) { Text($0.rawValue).tag($0) }
+            }
+
+            if method == .psk {
+                SecureField("Pre-Shared Key (e.g. 0000)", text: $psk)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .onSubmit { Task { await connect() } }
+            }
+
+            Button("Connect") { Task { await connect() } }
+                .disabled(host.isEmpty || (method == .psk && psk.isEmpty))
         } header: {
-            Text("Or enter the TV's IP address")
+            Text("TV IP address")
         } footer: {
-            Text("On the TV: Settings › Network & Internet › your network › IP address.")
+            Text(method == .pin
+                 ? "On the TV: Settings › Network & Internet › your network shows the IP address."
+                 : "On the TV: Settings › Network & Internet › Home network › IP control › Authentication = “Normal and Pre-Shared Key”, then set the Pre-Shared Key.")
         }
     }
 
     private var howToSection: some View {
         Section("Before you start") {
-            step(1, "On the TV open Settings › Network & Internet › Remote device settings.")
-            step(2, "Turn on Control remotely. Set Authentication to Normal (PIN).")
+            step(1, "Turn the TV on (not standby).")
+            step(2, "On the TV open Settings › Network & Internet › Remote device settings and turn on Control remotely.")
             step(3, "Optional: turn on Remote Start so the app can switch the TV on.")
-            step(4, "Keep your iPhone on the same Wi‑Fi as the TV.")
+            step(4, "Keep your iPhone on the same Wi‑Fi as the TV, and allow Local Network access when iOS asks.")
         }
     }
 
     private var pinSection: some View {
         Section {
-            Text("A 4‑digit PIN is showing on your TV.")
+            Text("A 4‑digit PIN should now be showing on your TV.")
                 .font(.subheadline)
             TextField("PIN", text: $pin)
                 .keyboardType(.numberPad)
@@ -130,6 +154,23 @@ struct SetupView: View {
         }
     }
 
+    private var noPinSection: some View {
+        Section {
+            step(1, "Make sure the TV is on and showing a picture, then tap Show a new PIN.")
+            step(2, "Check Settings › Network & Internet › Remote device settings › Control remotely is on.")
+            step(3, "Open Remote device settings › Deregister remote device, remove old “Bravia Remote” entries, then try again.")
+            step(4, "If IP control › Authentication is set to “Pre-Shared Key” only, the TV never shows a PIN. Use a Pre-Shared Key instead.")
+            Button("Use Pre-Shared Key instead") {
+                method = .psk
+                awaitingPIN = false
+                pin = ""
+                error = nil
+            }
+        } header: {
+            Text("No PIN on the TV?")
+        }
+    }
+
     private func step(_ n: Int, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Text("\(n)")
@@ -142,7 +183,7 @@ struct SetupView: View {
 
     // MARK: - Actions
 
-    private func connect(to tv: DiscoveredTV) async {
+    private func select(_ tv: DiscoveredTV) async {
         error = nil
         working = true
         let ip = await discovery.resolveIPv4(tv)
@@ -153,7 +194,18 @@ struct SetupView: View {
         }
         host = ip
         selectedName = tv.name
-        await requestPIN()
+        if method == .psk && psk.isEmpty {
+            error = "Enter the Pre-Shared Key, then tap Connect."
+            return
+        }
+        await connect()
+    }
+
+    private func connect() async {
+        switch method {
+        case .pin: await requestPIN()
+        case .psk: await connectWithPSK()
+        }
     }
 
     private func requestPIN() async {
@@ -167,6 +219,18 @@ struct SetupView: View {
                 awaitingPIN = true
                 pinFocused = true
             }
+        } catch {
+            self.error = Self.describe(error)
+        }
+    }
+
+    private func connectWithPSK() async {
+        guard !psk.isEmpty else { return }
+        error = nil
+        working = true
+        defer { working = false }
+        do {
+            try await vm.pair(host: host, psk: psk, name: selectedName)
         } catch {
             self.error = Self.describe(error)
         }
@@ -188,8 +252,8 @@ struct SetupView: View {
     private static func describe(_ error: Error) -> String {
         if let urlError = error as? URLError {
             switch urlError.code {
-            case .timedOut, .cannotConnectToHost, .cannotFindHost, .networkConnectionLost:
-                return "Couldn't reach the TV. Check the IP, that it's on, and that Local Network access is allowed for this app in iOS Settings."
+            case .timedOut, .cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .notConnectedToInternet:
+                return "Couldn't reach the TV. Check the IP, that the TV is on, and that iOS Settings › Bravia Remote › Local Network is on."
             default:
                 return urlError.localizedDescription
             }

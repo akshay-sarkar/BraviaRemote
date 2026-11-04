@@ -72,9 +72,28 @@ final class RemoteViewModel: ObservableObject {
         client.host = trimmed
         self.host = trimmed
         if let name, !name.isEmpty { tvName = name }
+        // The TV only shows a PIN for clients it doesn't already know,
+        // so every new pairing attempt uses a fresh client id.
+        rotateClientId()
         let needsPIN = try await client.requestPIN()
         if !needsPIN { try await finishPairing() }
         return needsPIN
+    }
+
+    func pair(host: String, psk: String, name: String?) async throws {
+        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidHost(trimmed) else { throw BraviaError.invalidHost }
+        client.host = trimmed
+        self.host = trimmed
+        if let name, !name.isEmpty { tvName = name }
+        try await client.usePSK(psk.trimmingCharacters(in: .whitespacesAndNewlines))
+        try await finishPairing()
+    }
+
+    private func rotateClientId() {
+        let clientId = "BraviaRemote:\(UUID().uuidString)"
+        UserDefaults.standard.set(clientId, forKey: Defaults.clientId)
+        client.clientId = clientId
     }
 
     func pair(pin: String) async throws {

@@ -4,7 +4,7 @@ A native SwiftUI remote for Sony BRAVIA TVs on the 2021 **VH21** Google TV platf
 
 ## Features
 - Finds the TV automatically with Bonjour (`_googlecast._tcp`). You can also type the IP address.
-- Pairs with a 4‑digit PIN. The auth cookie and PIN are kept in the Keychain, and the cookie renews itself when it expires (about every 14 days).
+- Pairs with a 4‑digit PIN or the TV's Pre‑Shared Key (IP control). The auth cookie and PIN are kept in the Keychain, and the cookie renews itself when it expires (about every 14 days).
 - The main screen has the same keys, in the same order, as the physical BRAVIA voice remote:
   Power · TV · Settings · Input · 123 · D‑pad/OK · Back · Home · VOL± · Voice · Mute · CH± · Play · Pause · Guide · YouTube · Netflix · Disney+ · Prime Video
 - The arrows and the volume and channel keys repeat while you hold them.
@@ -61,6 +61,11 @@ BraviaRemote/
 | Text | `POST /sony/appControl` | `setTextForm` |
 
 ## Troubleshooting
+- **TV doesn't show a PIN**:
+  - Make sure the TV is on, not in standby.
+  - Go to **Remote device settings › Deregister remote device** and remove old entries. The TV only shows a PIN for apps it doesn't already know, and each pairing attempt now uses a new app ID.
+  - If **IP control › Authentication** is set to **Pre‑Shared Key** only, the TV never shows a PIN. Choose *Pre‑Shared Key* in the app instead.
+- **Pre‑Shared Key setup**: on the TV go to **Settings › Network & Internet › Home network › IP control**. Set **Authentication** to **Normal and Pre‑Shared Key** and set a key, for example `0000`. Enter the same key in the app.
 - **"Couldn't reach the TV"**: check the IP address. Also check **iOS Settings › Bravia Remote › Local Network** is on.
 - **403 / "TV refused the request"**: **Control remotely** is off on the TV.
 - **Power on does nothing**: turn on **Remote Start**. If the TV is fully off and Remote Start is off, it isn't on the network to receive commands.

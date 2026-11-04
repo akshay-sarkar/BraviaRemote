@@ -4,6 +4,7 @@ enum BraviaError: LocalizedError {
     case invalidHost
     case notPaired
     case wrongPIN
+    case wrongPSK
     case remoteControlDisabled
     case http(Int)
     case api(code: Int, message: String)
@@ -14,6 +15,8 @@ enum BraviaError: LocalizedError {
         case .invalidHost: return "That doesn't look like a valid IP address."
         case .notPaired: return "Pairing expired. Pair the TV again."
         case .wrongPIN: return "Wrong PIN. Check the code on your TV and try again."
+        case .wrongPSK:
+            return "The TV rejected that Pre-Shared Key. On the TV set IP control › Authentication to “Normal and Pre-Shared Key” and check the key."
         case .remoteControlDisabled:
             return "The TV refused the request. Turn on Settings › Network & Internet › Remote device settings › Control remotely."
         case .http(let code): return "TV returned HTTP \(code)."
@@ -48,18 +51,20 @@ final class BraviaClient {
     private enum Keys {
         static let cookie = "auth.cookie"
         static let pin = "auth.pin"
+        static let psk = "auth.psk"
     }
 
     var host: String
-    let clientId: String
+    var clientId: String
     let nickname: String
 
     private(set) var authCookie: String?
     private(set) var pin: String?
+    private(set) var psk: String?
     private var requestId = 0
     private let session: URLSession
 
-    var hasCredentials: Bool { authCookie != nil || pin != nil }
+    var hasCredentials: Bool { authCookie != nil || pin != nil || psk != nil }
 
     init(host: String, clientId: String, nickname: String) {
         self.host = host
@@ -67,6 +72,7 @@ final class BraviaClient {
         self.nickname = nickname
         self.authCookie = KeychainStore.get(Keys.cookie)
         self.pin = KeychainStore.get(Keys.pin)
+        self.psk = KeychainStore.get(Keys.psk)
 
         let config = URLSessionConfiguration.ephemeral
         config.httpShouldSetCookies = false
@@ -112,8 +118,27 @@ final class BraviaClient {
         }
     }
 
+    /// Alternative to PIN pairing: the TV's IP-control Pre-Shared Key, sent as `X-Auth-PSK` on every request.
+    /// Validated with a call that requires authentication.
+    func usePSK(_ key: String) async throws {
+        store(cookie: nil, pin: nil)
+        psk = key
+        do {
+            _ = try await call("appControl", "getApplicationList", allowRenew: false)
+            KeychainStore.set(key, for: Keys.psk)
+        } catch BraviaError.notPaired {
+            psk = nil
+            throw BraviaError.wrongPSK
+        } catch {
+            psk = nil
+            throw error
+        }
+    }
+
     func forget() {
         store(cookie: nil, pin: nil)
+        psk = nil
+        KeychainStore.set(nil, for: Keys.psk)
     }
 
     /// Re-registers with the saved PIN. Returns false if the TV no longer accepts it.
@@ -276,6 +301,7 @@ final class BraviaClient {
         request.httpBody = body
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
         if sendCookie, let authCookie { request.setValue("auth=\(authCookie)", forHTTPHeaderField: "Cookie") }
+        if let psk { request.setValue(psk, forHTTPHeaderField: "X-Auth-PSK") }
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw BraviaError.invalidResponse }

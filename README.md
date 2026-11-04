@@ -1,73 +1,216 @@
-# Bravia Remote (iOS)
+<div align="center">
 
-A native SwiftUI remote for Sony BRAVIA TVs on the 2021 **VH21** Google TV platform (X80J/X85J/X90J/A80J and similar). It sends commands over Wi‑Fi using Sony's local REST API and IRCC, with PIN pairing.
+# Bravia Remote
+
+**A native SwiftUI Wi‑Fi remote for Sony BRAVIA Google TVs. It comes with four poster themes.**
+
+[![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-black?logo=apple)](#requirements)
+[![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)](#build-from-source)
+[![SwiftUI](https://img.shields.io/badge/UI-SwiftUI-0A84FF)](#architecture)
+[![Dependencies](https://img.shields.io/badge/dependencies-none-success)](#architecture)
+[![Download](https://img.shields.io/badge/download-latest%20IPA-F5C518?logo=github&logoColor=black)](../../releases/latest)
+
+<br>
+
+<img src="docs/screenshots/hero.jpg" alt="Bravia Remote in its four themes" width="100%">
+
+</div>
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Themes](#themes)
+- [Requirements](#requirements)
+- [Install](#install)
+- [TV setup](#tv-setup)
+- [Pairing](#pairing)
+- [Build from source](#build-from-source)
+- [Publishing a release](#publishing-a-release)
+- [Architecture](#architecture)
+- [Sony REST API reference](#sony-rest-api-reference)
+- [Troubleshooting](#troubleshooting)
+- [Disclaimer](#disclaimer)
+
+---
 
 ## Features
-- Finds the TV automatically with Bonjour (`_googlecast._tcp`). You can also type the IP address.
-- Pairs with a 4‑digit PIN or the TV's Pre‑Shared Key (IP control). The auth cookie and PIN are kept in the Keychain, and the cookie renews itself when it expires (about every 14 days).
-- **4 themes** with original poster backgrounds: Aurora Graphite, Midnight Signal, Crimson Night and Banana Lab. Switch themes from the **⋯ → Theme** menu or in Settings. Your choice is remembered.
-- Main screen: Power · TV · Input · Settings · 123 · VOL± / D‑pad + OK / CH± · Back · Voice · Mute · Home · Play · Pause · Guide. The keys sit low, within thumb reach, and the poster shows at the top.
-- The arrows and the volume and channel keys repeat while you hold them.
-- The Voice key opens a box that sends text to the TV's search. Tap the iPhone keyboard's 🎤 to dictate.
-- 123 opens a number pad with Guide, Info and the color keys.
-- Apps open from **⋯ → All apps**. That screen has quick buttons for YouTube, Netflix, Disney+ and Prime Video.
-- The ⋯ menu has the full app list and extra keys the physical remote doesn't have (rewind, fast‑forward, stop, subtitles…).
-- Gets the TV's own button codes on connect, and uses the standard Sony codes if that fails
-- Haptics, dark UI, and VoiceOver labels
 
-## TV setup (one time)
-1. **Settings › Network & Internet › Remote device settings › Control remotely → On**
-2. In the same menu, set **Authentication → Normal** (PIN).
-3. Optional: **Settings › Network & Internet › Remote Start → On** lets the app turn the TV on from standby.
-4. Put the iPhone and the TV on the same Wi‑Fi network.
+| | |
+|---|---|
+| 📡 **Finds your TV automatically** | Finds the TV on your Wi‑Fi with Bonjour. You can also type its IP address. |
+| 🔐 **Two ways to pair** | 4‑digit PIN or Pre‑Shared Key. Credentials are kept in the iOS Keychain, and the PIN session renews itself. |
+| 🎛️ **Full remote layout** | Power · TV · Input · Settings · 123 · D‑pad · VOL± · CH± · Back · Home · Voice · Mute · Play · Pause · Guide. |
+| 👍 **Thumb‑zone design** | The controls sit low on the screen. Volume and channel are on each side of the D‑pad, so there are no wasted rows. |
+| 🔁 **Hold to repeat** | Holding an arrow, volume or channel key keeps sending it. Every press gives haptic feedback. |
+| ⌨️ **Voice & type** | Sends text to the TV's search box. Use the iPhone keyboard's 🎤 to dictate. |
+| 📺 **App launcher** | Lists every app installed on the TV, with one‑tap YouTube, Netflix, Disney+ and Prime Video. |
+| 🎨 **Four themes** | Each theme has its own original poster, key shapes and D‑pad. Switch instantly from **⋯ → Theme**. |
+| ♿ **Accessible** | VoiceOver labels on every key. The layout scales down to fit smaller iPhones. |
+| 🪶 **Zero dependencies** | Built only with SwiftUI, Foundation, Network and Security. |
 
-## Build & run
-Requires **Xcode 16 or newer** (the project uses synchronized folders) and iOS 17+.
+## Themes
 
-1. Open `BraviaRemote.xcodeproj`.
-2. Select the **BraviaRemote** target › *Signing & Capabilities* › choose your Team. A free Apple ID works. If the bundle ID is taken, change it.
-3. Choose your iPhone and press **Run**.
-4. On the first launch, allow **Local Network** access when iOS asks. Pick your TV and enter the PIN it shows.
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/theme-aurora-graphite.png" width="200" alt="Aurora Graphite"><br><b>Aurora Graphite</b><br><sub>Northern lights · mint glass</sub></td>
+    <td align="center"><img src="docs/screenshots/theme-midnight-signal.png" width="200" alt="Midnight Signal"><br><b>Midnight Signal</b><br><sub>Rainy skyline · amber · angled keys</sub></td>
+    <td align="center"><img src="docs/screenshots/theme-crimson-night.png" width="200" alt="Crimson Night"><br><b>Crimson Night</b><br><sub>Neon towers · red & blue</sub></td>
+    <td align="center"><img src="docs/screenshots/theme-banana-lab.png" width="200" alt="Banana Lab"><br><b>Banana Lab</b><br><sub>Bubbles & bananas · silver ring</sub></td>
+  </tr>
+</table>
 
-> The Simulator can reach the TV, but the Bonjour list may be empty there. Use the manual IP field instead.
+Switch themes from **⋯ → Theme**, or in **⋯ → More keys & settings**. The app remembers your choice.
 
-## Project layout
+## Requirements
+
+| | |
+|---|---|
+| **TV** | Sony BRAVIA with the IP Control REST API. Built for the 2021 **VH21** Google TV platform (X80J / X85J / X90J / A80J). Other 2016+ Android TV and Google TV BRAVIAs should also work. |
+| **iPhone** | iOS 17 or later |
+| **Network** | iPhone and TV on the same Wi‑Fi |
+| **To build** | macOS with **Xcode 16+**, or just GitHub Actions (see below) |
+
+## Install
+
+1. Download **`BraviaRemote-unsigned.ipa`** from the [**latest release**](../../releases/latest).
+2. Sideload it with [Sideloadly](https://sideloadly.io) or [AltStore](https://altstore.io). The tool signs the app with your own Apple ID.
+3. Open **Bravia Remote**, allow **Local Network** access, then pick your TV.
+
+> [!NOTE]
+> With a free Apple ID, sideloaded apps expire after 7 days. Re-sideload the IPA, or use a paid developer account (1 year).
+
+## TV setup
+
+Do this once on the TV:
+
+1. **Settings › Network & Internet › Remote device settings › Control remotely** → **On**
+2. *(Optional)* **Settings › Network & Internet › Remote Start** → **On**. This lets the app power the TV on from standby.
+3. *(Only for the Pre‑Shared Key method)* **Settings › Network & Internet › Home network › IP control**:
+   set **Authentication** to **Normal and Pre‑Shared Key** and choose a key, for example `0000`.
+
+## Pairing
+
+| Method | How it works |
+|---|---|
+| **PIN code** *(default)* | Tap **Connect**. A 4‑digit PIN appears on the TV; type it into the app. Each pairing attempt uses a new client ID, so the TV always shows a fresh PIN. |
+| **Pre‑Shared Key** | Choose *Pre‑Shared Key*, enter the key you set on the TV and tap **Connect**. No pop‑up is involved, which makes it the most reliable method. |
+
+## Build from source
+
+```bash
+git clone <this-repo-url> && cd BraviaRemote
+open BraviaRemote.xcodeproj        # pick your Team under Signing & Capabilities, then ⌘R
+```
+
+Build an unsigned IPA locally:
+
+```bash
+bash scripts/build-unsigned-ipa.sh                       # → build/BraviaRemote-unsigned.ipa
+MARKETING_VERSION=1.2.0 BUILD_NUMBER=42 bash scripts/build-unsigned-ipa.sh
+```
+
+### Continuous integration
+
+| Workflow | Trigger | Output |
+|---|---|---|
+| [`build-ipa.yml`](.github/workflows/build-ipa.yml) | Every push to `main` | IPA as a workflow **artifact** (signed‑in users only, kept 90 days) |
+| [`release.yml`](.github/workflows/release.yml) | Pushing a `v*` tag, or a manual run | A public **GitHub Release** with the IPA attached |
+
+## Publishing a release
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+GitHub Actions builds the IPA on a macOS runner and stamps it with version `1.0.0`. It then publishes a release called **Bravia Remote v1.0.0** with release notes and `BraviaRemote-unsigned.ipa` attached.
+You can also run it without a terminal: **Actions → Release IPA → Run workflow**, then enter a tag.
+
+The download link always points to the newest release:
+
+```
+https://github.com/<owner>/<repo>/releases/latest/download/BraviaRemote-unsigned.ipa
+```
+
+> [!IMPORTANT]
+> Release downloads are public only if the repository is **public**. On a private repo, only collaborators can download them.
+
+## Architecture
+
 ```
 BraviaRemote/
-├─ BraviaRemoteApp.swift        App entry; switches between setup and the remote
-├─ RemoteViewModel.swift        State, command queue, pairing flow, errors
+├─ BraviaRemoteApp.swift          App entry · theme injection · setup ↔ remote routing
+├─ RemoteViewModel.swift          State, serialized command queue, pairing, error handling
 ├─ Services/
-│  ├─ BraviaClient.swift        REST + IRCC client (actRegister PIN auth, cookie renew)
-│  ├─ RemoteKey.swift           Key names and fallback IRCC codes
-│  ├─ TVDiscovery.swift         NWBrowser Bonjour discovery and IPv4 lookup
-│  └─ KeychainStore.swift
-└─ Views/
-   ├─ RemoteView.swift          Main remote
-   ├─ SetupView.swift           Discovery, IP entry, PIN pairing
-   ├─ Sheets.swift              Apps, Keyboard, Number pad, Settings
-   ├─ Theme.swift               AppTheme tokens, poster background, themed keys/rockers/D-pad, theme picker
-   ├─ Components.swift          RemoteButton (press/repeat), shared key views, toast
-   └─ RemoteIcons.swift         Custom glyphs: Input, Guide, volume wedge, OK cross-hair
+│  ├─ BraviaClient.swift          Sony REST (JSON‑RPC) + IRCC (SOAP), cookie / PSK auth
+│  ├─ PairingConnection.swift     Minimal raw HTTP/1.1 client for the PIN handshake
+│  ├─ RemoteKey.swift             Key names + fallback IRCC codes
+│  ├─ TVDiscovery.swift           Bonjour (_googlecast._tcp) discovery + IPv4 lookup
+│  └─ KeychainStore.swift         Keychain wrapper
+├─ Views/
+│  ├─ RemoteView.swift            Main remote layout
+│  ├─ Theme.swift                 AppTheme tokens, poster background, themed keys / rockers / D‑pad
+│  ├─ SetupView.swift             Discovery, IP entry, PIN / PSK pairing
+│  ├─ Sheets.swift                Apps, Voice & Type, Number pad, Settings
+│  ├─ Components.swift            RemoteButton (press & hold‑to‑repeat), shared keys, toast
+│  └─ RemoteIcons.swift           Custom glyphs (Input, Guide, volume wedge)
+└─ Assets.xcassets                App icon, accent colour, theme posters
 ```
 
-## API reference (what the app calls)
+**Design notes**
+
+- Key presses go through a **serial queue**, so they reach the TV in order. Commands are dropped while the TV is unreachable, instead of piling up.
+- On connect, the app loads the **TV's own IRCC code table** (`getRemoteControllerInfo`). It falls back to the standard Sony codes only when that fails.
+- PIN pairing uses a raw socket instead of `URLSession`, because `URLSession`'s automatic handling of the `401` reply made the TV cancel the PIN pop‑up.
+
+## Sony REST API reference
+
 | Purpose | Endpoint | Method |
 |---|---|---|
-| Pair / renew | `POST /sony/accessControl` | `actRegister` (401 → TV shows PIN; then `Authorization: Basic base64(":PIN")` → `Set-Cookie: auth=…`) |
+| Pair / renew | `POST /sony/accessControl` | `actRegister` |
 | Button press | `POST /sony/IRCC` | SOAP `X_SendIRCC` |
 | Button codes | `POST /sony/system` | `getRemoteControllerInfo` |
 | Power | `POST /sony/system` | `getPowerStatus`, `setPowerStatus` |
 | TV info | `POST /sony/system` | `getSystemInformation` |
 | Apps | `POST /sony/appControl` | `getApplicationList`, `setActiveApp` |
-| Text | `POST /sony/appControl` | `setTextForm` |
+| Text input | `POST /sony/appControl` | `setTextForm` |
+
+Auth is either an `auth` cookie from PIN pairing, or an `X-Auth-PSK: <key>` header for the Pre‑Shared Key method.
 
 ## Troubleshooting
-- **TV doesn't show a PIN**:
-  - Make sure the TV is on, not in standby.
-  - Go to **Remote device settings › Deregister remote device** and remove old entries. The TV only shows a PIN for apps it doesn't already know, and each pairing attempt now uses a new app ID.
-  - If **IP control › Authentication** is set to **Pre‑Shared Key** only, the TV never shows a PIN. Choose *Pre‑Shared Key* in the app instead.
-- **Pre‑Shared Key setup**: on the TV go to **Settings › Network & Internet › Home network › IP control**. Set **Authentication** to **Normal and Pre‑Shared Key** and set a key, for example `0000`. Enter the same key in the app.
-- **"Couldn't reach the TV"**: check the IP address. Also check **iOS Settings › Bravia Remote › Local Network** is on.
-- **403 / "TV refused the request"**: **Control remotely** is off on the TV.
-- **Power on does nothing**: turn on **Remote Start**. If the TV is fully off and Remote Start is off, it isn't on the network to receive commands.
-- **Pairing expired**: open Settings › Forget this TV, then pair again.
+
+<details>
+<summary><b>"Couldn't reach the TV"</b></summary>
+
+- Check the IP: on the TV, open **Settings › Network & Internet** and select your network.
+- Make sure **iOS Settings › Bravia Remote › Local Network** is on.
+- The iPhone and TV must be on the same Wi‑Fi. Guest networks often block device‑to‑device traffic.
+</details>
+
+<details>
+<summary><b>No PIN appears, or the TV says "Registration cancelled"</b></summary>
+
+- The TV must be **on**, not in standby.
+- Remove old entries under **Remote device settings › Deregister remote device**, then try again.
+- If **IP control › Authentication** is set to *Pre‑Shared Key* only, the TV never shows a PIN. Use the PSK method instead.
+</details>
+
+<details>
+<summary><b>Power‑on doesn't work</b></summary>
+
+Turn on **Remote Start**. If the TV is fully powered off with Remote Start disabled, it isn't on the network.
+</details>
+
+<details>
+<summary><b>"Pairing expired"</b></summary>
+
+Open **⋯ → More keys & settings → Forget this TV**, then pair again.
+</details>
+
+## Disclaimer
+
+Bravia Remote is an independent hobby project. It is **not affiliated with, endorsed by, or sponsored by Sony**.
+BRAVIA and Sony are trademarks of Sony Group Corporation. YouTube, Netflix, Disney+ and Prime Video are trademarks of their respective owners.
+All theme artwork is original.

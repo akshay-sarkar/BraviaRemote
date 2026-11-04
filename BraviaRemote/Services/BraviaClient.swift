@@ -33,6 +33,28 @@ struct TVApp: Identifiable, Hashable {
     var id: String { uri }
 }
 
+/// An external input (HDMI, composite…) as reported by `getCurrentExternalInputsStatus`.
+struct TVInput: Identifiable, Hashable {
+    let uri: String
+    let title: String
+    let label: String
+    let icon: String?
+    let connected: Bool
+    var id: String { uri }
+
+    /// The user's custom label (e.g. "PS5") when set, otherwise the port name ("HDMI 2").
+    var displayName: String { label.isEmpty ? title : label }
+    var subtitle: String? { label.isEmpty ? nil : title }
+
+    var systemImage: String {
+        let kind = "\(uri) \(icon ?? "")".lowercased()
+        if kind.contains("hdmi") { return "cable.connector.horizontal" }
+        if kind.contains("composite") || kind.contains("component") { return "cable.coaxial" }
+        if kind.contains("scart") { return "cable.connector" }
+        return "rectangle.on.rectangle"
+    }
+}
+
 struct TVInfo {
     let model: String?
     let name: String?
@@ -48,15 +70,23 @@ struct TVInfo {
 /// silently re-registers when the cookie expires.
 @MainActor
 final class BraviaClient {
-    private enum Keys {
-        static let cookie = "auth.cookie"
-        static let pin = "auth.pin"
-        static let psk = "auth.psk"
+    /// Keychain item names, scoped per TV so several TVs can stay paired at once.
+    private struct Keys {
+        let cookie: String
+        let pin: String
+        let psk: String
+
+        init(scope: String) {
+            cookie = "auth.cookie.\(scope)"
+            pin = "auth.pin.\(scope)"
+            psk = "auth.psk.\(scope)"
+        }
     }
 
     var host: String
     var clientId: String
     let nickname: String
+    private let keys: Keys
 
     private(set) var authCookie: String?
     private(set) var pin: String?
@@ -67,13 +97,15 @@ final class BraviaClient {
 
     var hasCredentials: Bool { authCookie != nil || pin != nil || psk != nil }
 
-    init(host: String, clientId: String, nickname: String) {
+    init(host: String, clientId: String, nickname: String, credentialScope: String) {
         self.host = host
         self.clientId = clientId
         self.nickname = nickname
-        self.authCookie = KeychainStore.get(Keys.cookie)
-        self.pin = KeychainStore.get(Keys.pin)
-        self.psk = KeychainStore.get(Keys.psk)
+        let keys = Keys(scope: credentialScope)
+        self.keys = keys
+        self.authCookie = KeychainStore.get(keys.cookie)
+        self.pin = KeychainStore.get(keys.pin)
+        self.psk = KeychainStore.get(keys.psk)
 
         let config = URLSessionConfiguration.ephemeral
         config.httpShouldSetCookies = false
@@ -89,9 +121,9 @@ final class BraviaClient {
 
     /// Step 1: ask the TV to show a PIN. Returns `false` if the TV authorised us without a PIN.
     ///
-    /// Pairing goes over one raw, persistent TCP connection instead of URLSession. URLSession
-    /// handles the TV's `401 WWW-Authenticate: Basic` reply itself and manages connections, and the
-    /// TV then shows "Registration cancelled" a second after showing the PIN.
+    /// Pairing uses a raw curl-style HTTP request instead of URLSession. With URLSession, the TV
+    /// showed "Registration cancelled" a second after showing the PIN, while the same request
+    /// from curl kept the PIN on screen.
     func requestPIN() async throws -> Bool {
         pairing?.close()
         let connection = PairingConnection(host: host.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -100,7 +132,7 @@ final class BraviaClient {
                                                  body: registerBody(),
                                                  headers: ["Content-Type": "application/json; charset=UTF-8"])
         switch response.status {
-        case 401: return true // PIN is on screen; keep the connection open for step 2
+        case 401: return true // PIN is on screen
         case 200:
             closePairing()
             if let cookie = Self.extractAuthCookie(fromSetCookie: response.headers["set-cookie"]) {
@@ -116,7 +148,7 @@ final class BraviaClient {
         }
     }
 
-    /// Step 2: send the PIN shown on screen (same connection as step 1) and receive the auth cookie.
+    /// Step 2: send the PIN shown on screen and receive the auth cookie.
     func confirmPIN(_ pin: String) async throws {
         let token = Data(":\(pin)".utf8).base64EncodedString()
         let connection = pairing ?? PairingConnection(host: host.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -150,7 +182,7 @@ final class BraviaClient {
         psk = key
         do {
             _ = try await call("appControl", "getApplicationList", allowRenew: false)
-            KeychainStore.set(key, for: Keys.psk)
+            KeychainStore.set(key, for: keys.psk)
         } catch BraviaError.notPaired {
             psk = nil
             throw BraviaError.wrongPSK
@@ -163,7 +195,7 @@ final class BraviaClient {
     func forget() {
         store(cookie: nil, pin: nil)
         psk = nil
-        KeychainStore.set(nil, for: Keys.psk)
+        KeychainStore.set(nil, for: keys.psk)
     }
 
     /// Re-registers with the saved PIN. Returns false if the TV no longer accepts it.
@@ -184,8 +216,8 @@ final class BraviaClient {
     private func store(cookie: String?, pin: String?) {
         authCookie = cookie
         self.pin = pin
-        KeychainStore.set(cookie, for: Keys.cookie)
-        KeychainStore.set(pin, for: Keys.pin)
+        KeychainStore.set(cookie, for: keys.cookie)
+        KeychainStore.set(pin, for: keys.pin)
     }
 
     private func registerBody() -> Data {
@@ -273,6 +305,33 @@ final class BraviaClient {
 
     func launch(uri: String) async throws {
         try await call("appControl", "setActiveApp", params: [["uri": uri]])
+    }
+
+    /// HDMI and other external inputs, with any custom labels set on the TV.
+    func externalInputs() async throws -> [TVInput] {
+        let result = try await call("avContent", "getCurrentExternalInputsStatus")
+        guard let list = result.first as? [[String: Any]] else { return [] }
+        return list.compactMap { item in
+            guard let uri = item["uri"] as? String else { return nil }
+            let connected: Bool
+            if let flag = item["connection"] as? Bool { connected = flag }
+            else { connected = (item["status"] as? String) == "true" }
+            return TVInput(uri: uri,
+                           title: item["title"] as? String ?? uri,
+                           label: item["label"] as? String ?? "",
+                           icon: item["icon"] as? String,
+                           connected: connected)
+        }
+    }
+
+    /// URI of what's on screen now (an input or a channel), or nil while an app is showing.
+    func playingContentURI() async -> String? {
+        guard let result = try? await call("avContent", "getPlayingContentInfo") else { return nil }
+        return (result.first as? [String: Any])?["uri"] as? String
+    }
+
+    func switchInput(uri: String) async throws {
+        try await call("avContent", "setPlayContent", params: [["uri": uri]])
     }
 
     /// Types into the TV's on-screen keyboard (a text field must be focused on the TV).

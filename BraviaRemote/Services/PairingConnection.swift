@@ -1,11 +1,10 @@
 import Foundation
 import Network
 
-/// Minimal HTTP/1.1 client over one persistent TCP connection, used only for PIN pairing.
-///
-/// It sends exactly the bytes we write: no automatic auth handling, no retries, no extra
-/// connections. The PIN request (step 1) and the PIN confirmation (step 2) can therefore share
-/// one socket, like Sony's own apps do.
+/// Minimal HTTP/1.1 client used only for PIN pairing. It behaves like `curl`, which was
+/// confirmed to keep the TV's PIN on screen. Each request gets its own TCP connection. The
+/// client sends exactly the bytes we write (no automatic auth handling, no retries), reads one
+/// response and closes the connection.
 final class PairingConnection {
     struct Response {
         let status: Int
@@ -36,7 +35,7 @@ final class PairingConnection {
 
         var head = "POST \(path) HTTP/1.1\r\n"
         head += "Host: \(host)\r\n"
-        head += "Connection: keep-alive\r\n"
+        head += "User-Agent: BraviaRemote/1.0\r\n"
         head += "Accept: */*\r\n"
         head += "Content-Length: \(body.count)\r\n"
         for (name, value) in headers { head += "\(name): \(value)\r\n" }
@@ -52,7 +51,7 @@ final class PairingConnection {
         do {
             try await send(request, on: conn)
             let response = try await readResponse(on: conn)
-            if response.headers["connection"]?.lowercased() == "close" { close() }
+            close() // one request per connection, exactly like curl
             return response
         } catch {
             close()

@@ -32,6 +32,7 @@
 - [Architecture](#architecture)
 - [Sony REST API reference](#sony-rest-api-reference)
 - [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
 - [Contributing](#contributing)
 - [License](#license)
 - [Disclaimer](#disclaimer)
@@ -42,6 +43,9 @@
 
 | | |
 |---|---|
+| 📺 **Multiple TVs** | Pair every BRAVIA in the house and switch by tapping the TV name. |
+| 🔀 **Input picker** | Jump straight to HDMI 1–4, with the names you gave them on the TV. |
+| 🔊 **iPhone volume buttons** | Control the TV volume with your phone's side buttons while the remote is open. |
 | 📡 **Finds your TV automatically** | Finds the TV on your Wi‑Fi with Bonjour. You can also type its IP address. |
 | 🔐 **Two ways to pair** | 4‑digit PIN or Pre‑Shared Key. Credentials are kept in the iOS Keychain, and the PIN session renews itself. |
 | 🎛️ **Full remote layout** | Power · TV · Input · Settings · 123 · D‑pad · VOL± · CH± · Back · Home · Voice · Mute · Play · Pause · Guide. |
@@ -50,7 +54,8 @@
 | ⌨️ **Voice & type** | Sends text to the TV's search box. Use the iPhone keyboard's 🎤 to dictate. |
 | 📺 **App launcher** | Lists every app installed on the TV, with one‑tap YouTube, Netflix, Disney+ and Prime Video. |
 | 🎨 **Four themes** | Each theme has its own original poster, key shapes and D‑pad. Switch instantly from **⋯ → Theme**. |
-| ♿ **Accessible** | VoiceOver labels on every key. The layout scales down to fit smaller iPhones. |
+| 📱 **Sized for every iPhone** | Separate layouts for SE / mini, standard and Pro Max screens. |
+| ♿ **Accessible** | Dynamic Type, Bold Text and VoiceOver labels on every key. |
 | 🪶 **Zero dependencies** | Built only with SwiftUI, Foundation, Network and Security. |
 
 ## Themes
@@ -149,14 +154,16 @@ BraviaRemote/
 ├─ Services/
 │  ├─ BraviaClient.swift          Sony REST (JSON‑RPC) + IRCC (SOAP), cookie / PSK auth
 │  ├─ PairingConnection.swift     Minimal raw HTTP/1.1 client for the PIN handshake
+│  ├─ TVStore.swift               Saved TVs, active TV, v1.0 → v1.1 migration
+│  ├─ HardwareVolume.swift        iPhone volume buttons → TV volume
 │  ├─ RemoteKey.swift             Key names + fallback IRCC codes
 │  ├─ TVDiscovery.swift           Bonjour (_googlecast._tcp) discovery + IPv4 lookup
 │  └─ KeychainStore.swift         Keychain wrapper
 ├─ Views/
-│  ├─ RemoteView.swift            Main remote layout
+│  ├─ RemoteView.swift            Main remote layout + per-screen-size metrics
 │  ├─ Theme.swift                 AppTheme tokens, poster background, themed keys / rockers / D‑pad
 │  ├─ SetupView.swift             Discovery, IP entry, PIN / PSK pairing
-│  ├─ Sheets.swift                Apps, Voice & Type, Number pad, Settings
+│  ├─ Sheets.swift                Apps, Inputs, Voice & Type, Number pad, Settings
 │  ├─ Components.swift            RemoteButton (press & hold‑to‑repeat), shared keys, toast
 │  └─ RemoteIcons.swift           Custom glyphs (Input, Guide, volume wedge)
 └─ Assets.xcassets                App icon, accent colour, theme posters
@@ -178,6 +185,7 @@ BraviaRemote/
 | Power | `POST /sony/system` | `getPowerStatus`, `setPowerStatus` |
 | TV info | `POST /sony/system` | `getSystemInformation` |
 | Apps | `POST /sony/appControl` | `getApplicationList`, `setActiveApp` |
+| Inputs | `POST /sony/avContent` | `getCurrentExternalInputsStatus`, `getPlayingContentInfo`, `setPlayContent` |
 | Text input | `POST /sony/appControl` | `setTextForm` |
 
 Auth is either an `auth` cookie from PIN pairing, or an `X-Auth-PSK: <key>` header for the Pre‑Shared Key method.
@@ -211,6 +219,10 @@ Turn on **Remote Start**. If the TV is fully powered off with Remote Start disab
 
 Open **⋯ → More keys & settings → Forget this TV**, then pair again.
 </details>
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 

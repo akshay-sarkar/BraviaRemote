@@ -4,6 +4,13 @@ struct SetupView: View {
     @EnvironmentObject private var vm: RemoteViewModel
     @StateObject private var discovery = TVDiscovery()
 
+    /// True when presented over the remote to add or re-pair a TV.
+    private let isSheet: Bool
+
+    init(isSheet: Bool = false) {
+        self.isSheet = isSheet
+    }
+
     enum AuthMethod: String, CaseIterable, Identifiable {
         case pin = "PIN code"
         case psk = "Pre-Shared Key"
@@ -39,8 +46,16 @@ struct SetupView: View {
                     }
                 }
             }
-            .navigationTitle(awaitingPIN ? "Enter PIN" : "Connect your BRAVIA")
+            .navigationTitle(awaitingPIN ? "Enter PIN" : (isSheet ? "Add a TV" : "Connect your BRAVIA"))
             .toolbar {
+                if isSheet && !awaitingPIN {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            vm.cancelPairing()
+                            vm.showingSetup = false
+                        }
+                    }
+                }
                 if awaitingPIN {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Back") {
@@ -53,7 +68,13 @@ struct SetupView: View {
             }
             .disabled(working)
             .overlay { if working { ProgressView().controlSize(.large) } }
-            .onAppear { discovery.start() }
+            .onAppear {
+                discovery.start()
+                if let prefill = vm.setupPrefill, host.isEmpty {
+                    host = prefill.host
+                    selectedName = prefill.name
+                }
+            }
             .onDisappear { discovery.stop() }
         }
     }
@@ -134,7 +155,7 @@ struct SetupView: View {
 
     private var pinSection: some View {
         Section {
-            Text("A 4‑digit PIN should now be showing on your TV.")
+            Text("A 4‑digit PIN should now be showing on your TV. If it closes too fast, you can still try typing it here.")
                 .font(.subheadline)
             TextField("PIN", text: $pin)
                 .keyboardType(.numberPad)
@@ -209,6 +230,7 @@ struct SetupView: View {
     }
 
     private func requestPIN() async {
+        guard !working else { return } // one PIN request at a time — a second one closes the TV pop-up
         error = nil
         working = true
         defer { working = false }
@@ -225,7 +247,7 @@ struct SetupView: View {
     }
 
     private func connectWithPSK() async {
-        guard !psk.isEmpty else { return }
+        guard !psk.isEmpty, !working else { return }
         error = nil
         working = true
         defer { working = false }

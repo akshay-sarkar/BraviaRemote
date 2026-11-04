@@ -339,6 +339,7 @@ struct ThemedRocker<Mark: View>: View {
     @Environment(\.appTheme) private var theme
     private let title: String
     private let isChannel: Bool
+    private let width: CGFloat
     private let height: CGFloat
     private let onUp: () -> Void
     private let onDown: () -> Void
@@ -346,12 +347,14 @@ struct ThemedRocker<Mark: View>: View {
 
     init(title: String,
          isChannel: Bool,
+         width: CGFloat = 58,
          height: CGFloat,
          onUp: @escaping () -> Void,
          onDown: @escaping () -> Void,
          @ViewBuilder mark: () -> Mark) {
         self.title = title
         self.isChannel = isChannel
+        self.width = width
         self.height = height
         self.onUp = onUp
         self.onDown = onDown
@@ -378,7 +381,7 @@ struct ThemedRocker<Mark: View>: View {
             }
         }
         .foregroundStyle(.white)
-        .frame(width: 58, height: height)
+        .frame(width: width, height: height)
         .background {
             ZStack {
                 if theme.rockerUsesMaterial { shape.fill(.ultraThinMaterial) }

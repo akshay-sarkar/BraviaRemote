@@ -203,12 +203,115 @@ struct NumberPadSheet: View {
     }
 }
 
+// MARK: - Input picker
+
+struct InputPickerSheet: View {
+    @EnvironmentObject private var vm: RemoteViewModel
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
+    @State private var inputs: [TVInput] = []
+    @State private var current: String?
+    @State private var loading = true
+    @State private var failed = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if loading {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                } else if failed || inputs.isEmpty {
+                    Text("This TV didn't report its inputs. Use the TV's own input menu instead.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Section {
+                        ForEach(inputs) { input in
+                            Button {
+                                vm.switchInput(input)
+                                dismiss()
+                            } label: {
+                                row(for: input)
+                            }
+                        }
+                    } footer: {
+                        Text("Names come from the TV. Rename inputs on the TV under Settings › Channels & Inputs › External inputs.")
+                    }
+                }
+                Section {
+                    Button {
+                        vm.press(.tv)
+                        dismiss()
+                    } label: {
+                        Label("TV (live channels)", systemImage: "antenna.radiowaves.left.and.right")
+                    }
+                    Button {
+                        vm.press(.input)
+                        dismiss()
+                    } label: {
+                        Label("Open the TV's input menu", systemImage: "rectangle.on.rectangle")
+                    }
+                }
+            }
+            .navigationTitle("Inputs")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+            .task { await load() }
+            .refreshable { await load() }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func row(for input: TVInput) -> some View {
+        let isCurrent = input.uri == current
+        return HStack(spacing: 14) {
+            Image(systemName: input.systemImage)
+                .font(.title3)
+                .foregroundStyle(isCurrent ? theme.accent : .secondary)
+                .frame(width: 30)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(input.displayName).foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    if let subtitle = input.subtitle { Text(subtitle) }
+                    Text(input.connected ? "Connected" : "Nothing connected")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if isCurrent {
+                Image(systemName: "checkmark").foregroundStyle(theme.accent).fontWeight(.semibold)
+            }
+        }
+        .opacity(input.connected || isCurrent ? 1 : 0.55)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+
+    private func load() async {
+        do {
+            let result = try await vm.loadInputs()
+            inputs = result.inputs
+            current = result.current
+            failed = false
+        } catch {
+            failed = true
+        }
+        loading = false
+    }
+}
+
 // MARK: - Settings
 
 struct SettingsView: View {
     @EnvironmentObject private var vm: RemoteViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmForget = false
+    @AppStorage(HardwareVolumeController.settingKey) private var hardwareVolume = true
+    @State private var removing: SavedTV?
+    @State private var renaming: SavedTV?
+    @State private var newName = ""
 
     var body: some View {
         NavigationStack {
@@ -216,11 +319,35 @@ struct SettingsView: View {
                 Section("Theme") {
                     ThemeGrid()
                 }
-                Section("TV") {
-                    LabeledContent("Name", value: vm.tvName)
-                    LabeledContent("IP address", value: vm.host)
-                    if let model = vm.tvModel { LabeledContent("Model", value: model) }
+
+                Section {
+                    ForEach(vm.tvs) { tv in
+                        tvRow(tv)
+                            .swipeActions {
+                                Button("Remove", role: .destructive) { removing = tv }
+                                Button("Rename") { newName = tv.name; renaming = tv }.tint(.gray)
+                            }
+                    }
+                    Button {
+                        dismiss()
+                        vm.beginAddingTV()
+                    } label: {
+                        Label("Add another TV", systemImage: "plus.circle.fill")
+                    }
+                } header: {
+                    Text("TVs")
+                } footer: {
+                    Text("Tap a TV to switch to it. Swipe left to rename or remove it.")
                 }
+
+                Section {
+                    Toggle(isOn: $hardwareVolume) {
+                        Label("iPhone volume buttons", systemImage: "speaker.wave.2.fill")
+                    }
+                } footer: {
+                    Text("While the remote is open, the iPhone's volume buttons change the TV volume. Your iPhone's media volume is kept near the middle.")
+                }
+
                 Section("Extra keys (not on the physical remote)") {
                     Button("Rewind") { vm.press(.rewind) }
                     Button("Fast forward") { vm.press(.forward) }
@@ -231,8 +358,9 @@ struct SettingsView: View {
                     Button("Info / Display") { vm.press(.display) }
                     Button("Options") { vm.press(.options) }
                 }
+
                 Section {
-                    Button("Forget this TV", role: .destructive) { confirmForget = true }
+                    LabeledContent("Version", value: Self.appVersion)
                 } footer: {
                     Text("Power‑on from standby needs Settings › Network & Internet › Remote Start turned on.")
                 }
@@ -242,14 +370,60 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
-            .confirmationDialog("Forget \(vm.tvName)?", isPresented: $confirmForget, titleVisibility: .visible) {
-                Button("Forget", role: .destructive) {
-                    dismiss()
-                    vm.forgetTV()
+            .confirmationDialog("Remove \(removing?.name ?? "TV")?",
+                                isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+                                titleVisibility: .visible) {
+                Button("Remove", role: .destructive) {
+                    if let tv = removing {
+                        if vm.tvs.count == 1 { dismiss() }
+                        vm.remove(tv.id)
+                    }
+                    removing = nil
                 }
             } message: {
-                Text("You'll need to pair again with a PIN.")
+                Text("You'll need to pair it again to control it.")
+            }
+            .alert("Rename TV",
+                   isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("Name", text: $newName)
+                Button("Save") {
+                    if let tv = renaming { vm.rename(tv.id, to: newName) }
+                    renaming = nil
+                }
+                Button("Cancel", role: .cancel) { renaming = nil }
             }
         }
+    }
+
+    private func tvRow(_ tv: SavedTV) -> some View {
+        let isCurrent = tv.id == vm.currentID
+        return Button {
+            vm.switchTo(tv.id)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "tv")
+                    .font(.title3)
+                    .foregroundStyle(isCurrent ? Color.accentColor : .secondary)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tv.name).foregroundStyle(.primary)
+                    Text([tv.host, tv.model].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if isCurrent {
+                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor).fontWeight(.semibold)
+                }
+            }
+        }
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+
+    private static var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "–"
+        let build = info?["CFBundleVersion"] as? String ?? "–"
+        return "\(version) (\(build))"
     }
 }

@@ -62,6 +62,7 @@ final class BraviaClient {
     private(set) var pin: String?
     private(set) var psk: String?
     private var requestId = 0
+    private var pairing: PairingConnection?
     private let session: URLSession
 
     var hasCredentials: Bool { authCookie != nil || pin != nil || psk != nil }
@@ -79,43 +80,67 @@ final class BraviaClient {
         config.httpCookieAcceptPolicy = .never
         config.timeoutIntervalForRequest = 5
         config.waitsForConnectivity = false
-        self.session = URLSession(configuration: config)
+        config.urlCredentialStorage = nil
+        config.httpMaximumConnectionsPerHost = 1
+        self.session = URLSession(configuration: config, delegate: NoAutoAuthDelegate(), delegateQueue: nil)
     }
 
     // MARK: - Pairing
 
     /// Step 1: ask the TV to show a PIN. Returns `false` if the TV authorised us without a PIN.
+    ///
+    /// Pairing goes over one raw, persistent TCP connection instead of URLSession. URLSession
+    /// handles the TV's `401 WWW-Authenticate: Basic` reply itself and manages connections, and the
+    /// TV then shows "Registration cancelled" a second after showing the PIN.
     func requestPIN() async throws -> Bool {
-        let (_, http) = try await post(path: "accessControl",
-                                       body: registerBody(),
-                                       headers: ["Content-Type": "application/json"],
-                                       sendCookie: false)
-        switch http.statusCode {
-        case 401: return true
+        pairing?.close()
+        let connection = PairingConnection(host: host.trimmingCharacters(in: .whitespacesAndNewlines))
+        pairing = connection
+        let response = try await connection.post(path: "/sony/accessControl",
+                                                 body: registerBody(),
+                                                 headers: ["Content-Type": "application/json; charset=UTF-8"])
+        switch response.status {
+        case 401: return true // PIN is on screen; keep the connection open for step 2
         case 200:
-            if let cookie = Self.extractAuthCookie(from: http) { store(cookie: cookie, pin: pin) }
+            closePairing()
+            if let cookie = Self.extractAuthCookie(fromSetCookie: response.headers["set-cookie"]) {
+                store(cookie: cookie, pin: pin)
+            }
             return false
-        case 403: throw BraviaError.remoteControlDisabled
-        default: throw BraviaError.http(http.statusCode)
+        case 403:
+            closePairing()
+            throw BraviaError.remoteControlDisabled
+        default:
+            closePairing()
+            throw BraviaError.http(response.status)
         }
     }
 
-    /// Step 2: send the PIN shown on screen and receive the auth cookie.
+    /// Step 2: send the PIN shown on screen (same connection as step 1) and receive the auth cookie.
     func confirmPIN(_ pin: String) async throws {
         let token = Data(":\(pin)".utf8).base64EncodedString()
-        let (_, http) = try await post(path: "accessControl",
-                                       body: registerBody(),
-                                       headers: ["Content-Type": "application/json",
-                                                 "Authorization": "Basic \(token)"],
-                                       sendCookie: false)
-        switch http.statusCode {
+        let connection = pairing ?? PairingConnection(host: host.trimmingCharacters(in: .whitespacesAndNewlines))
+        pairing = connection
+        defer { closePairing() }
+        let response = try await connection.post(path: "/sony/accessControl",
+                                                 body: registerBody(),
+                                                 headers: ["Content-Type": "application/json; charset=UTF-8",
+                                                           "Authorization": "Basic \(token)"])
+        switch response.status {
         case 200:
-            guard let cookie = Self.extractAuthCookie(from: http) else { throw BraviaError.invalidResponse }
+            guard let cookie = Self.extractAuthCookie(fromSetCookie: response.headers["set-cookie"]) else {
+                throw BraviaError.invalidResponse
+            }
             store(cookie: cookie, pin: pin)
         case 401: throw BraviaError.wrongPIN
         case 403: throw BraviaError.remoteControlDisabled
-        default: throw BraviaError.http(http.statusCode)
+        default: throw BraviaError.http(response.status)
         }
+    }
+
+    private func closePairing() {
+        pairing?.close()
+        pairing = nil
     }
 
     /// Alternative to PIN pairing: the TV's IP-control Pre-Shared Key, sent as `X-Auth-PSK` on every request.
@@ -308,18 +333,26 @@ final class BraviaClient {
         return (data, http)
     }
 
-    private static func extractAuthCookie(from response: HTTPURLResponse) -> String? {
-        guard let url = response.url else { return nil }
-        var fields: [String: String] = [:]
-        for (key, value) in response.allHeaderFields {
-            if let key = key as? String, let value = value as? String { fields[key] = value }
+    private static func extractAuthCookie(fromSetCookie raw: String?) -> String? {
+        guard let raw, let range = raw.range(of: "auth=") else { return nil }
+        let value = raw[range.upperBound...].prefix { $0 != ";" && $0 != "\n" && $0 != "," }
+        return value.isEmpty ? nil : String(value)
+    }
+}
+
+/// The TV answers the PIN request with `401 WWW-Authenticate: Basic`. URLSession must hand that
+/// 401 straight back to us. It must not answer the challenge itself, because a second
+/// request reaching the TV closes the PIN pop-up.
+private final class NoAutoAuthDelegate: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession,
+                    task: URLSessionTask,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        switch challenge.protectionSpace.authenticationMethod {
+        case NSURLAuthenticationMethodHTTPBasic, NSURLAuthenticationMethodHTTPDigest, NSURLAuthenticationMethodDefault:
+            completionHandler(.rejectProtectionSpace, nil)
+        default:
+            completionHandler(.performDefaultHandling, nil)
         }
-        if let cookie = HTTPCookie.cookies(withResponseHeaderFields: fields, for: url).first(where: { $0.name == "auth" }) {
-            return cookie.value
-        }
-        // Fallback: parse "auth=XYZ; Path=/sony/; ..." manually.
-        guard let raw = fields.first(where: { $0.key.lowercased() == "set-cookie" })?.value,
-              let range = raw.range(of: "auth=") else { return nil }
-        return raw[range.upperBound...].split(separator: ";").first.map(String.init)
     }
 }

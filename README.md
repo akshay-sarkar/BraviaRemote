@@ -128,12 +128,15 @@ MARKETING_VERSION=1.2.0 BUILD_NUMBER=42 bash scripts/build-unsigned-ipa.sh
 
 ## Publishing a release
 
+1. Add a section for the new version to [`CHANGELOG.md`](CHANGELOG.md) (`## [1.2.0] — date`, with what's new and what's fixed). It becomes the release notes.
+2. Commit it, then tag and push:
+
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
-GitHub Actions builds the IPA on a macOS runner and stamps it with version `1.0.0`. It then publishes a release called **Bravia Remote v1.0.0** with release notes and `BraviaRemote-unsigned.ipa` attached.
+GitHub Actions builds the IPA on a macOS runner and stamps it with version `1.2.0`. It then publishes **Bravia Remote v1.2.0**, using that version's changelog section as the notes, with `BraviaRemote-unsigned.ipa` attached.
 You can also run it without a terminal: **Actions → Release IPA → Run workflow**, then enter a tag.
 
 The download link always points to the newest release:

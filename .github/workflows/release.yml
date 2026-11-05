@@ -1,7 +1,8 @@
 name: Release IPA
 
 # Publishes a GitHub Release with the unsigned IPA attached.
-#   • Push a version tag:   git tag v1.0.0 && git push origin v1.0.0
+# Release notes come from that version's section in CHANGELOG.md.
+#   • Push a version tag:   git tag v1.2.0 && git push origin v1.2.0
 #   • Or run it by hand:    Actions → Release IPA → Run workflow → enter a tag
 on:
   push:
@@ -9,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, e.g. v1.0.0'
+        description: 'Release tag, e.g. v1.2.0'
         required: true
 
 permissions:
@@ -23,31 +24,27 @@ jobs:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags are needed for the "Full changelog" compare link
 
       - name: Build unsigned IPA
         run: |
           MARKETING_VERSION="${TAG#v}" BUILD_NUMBER="${{ github.run_number }}" bash scripts/build-unsigned-ipa.sh
+
+      - name: Write release notes from CHANGELOG.md
+        run: bash scripts/release-notes.sh "$TAG" > release-notes.md
 
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           IPA=build/BraviaRemote-unsigned.ipa
-          NOTES=$(cat <<'MD'
-          ## Install
-          1. Download **BraviaRemote-unsigned.ipa** below.
-          2. Sideload it with [Sideloadly](https://sideloadly.io) or [AltStore](https://altstore.io) using your Apple ID.
-          3. Open the app, pick your BRAVIA and pair with the PIN or Pre-Shared Key.
-
-          > The IPA is unsigned. Your sideloading tool signs it with your own Apple ID.
-          MD
-          )
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$IPA" --clobber
+            gh release edit "$TAG" --notes-file release-notes.md
           else
             gh release create "$TAG" "$IPA" \
               --title "Bravia Remote $TAG" \
-              --notes "$NOTES" \
-              --generate-notes \
+              --notes-file release-notes.md \
               --target "$GITHUB_SHA"
           fi

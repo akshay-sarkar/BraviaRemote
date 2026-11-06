@@ -108,6 +108,7 @@ struct RemoteView: View {
         }
         .onAppear {
             vm.refresh()
+            vm.lockScreenRemoteSync()
             volumeButtons.onUp = { vm.press(.volumeUp) }
             volumeButtons.onDown = { vm.press(.volumeDown) }
             updateVolumeButtons()
@@ -190,6 +191,10 @@ struct RemoteView: View {
                     }
                 }
                 .pickerStyle(.menu)
+                Toggle(isOn: Binding(get: { vm.lockScreenRemoteEnabled },
+                                     set: { vm.setLockScreenRemote($0) })) {
+                    Label("Lock Screen remote", systemImage: "lock.iphone")
+                }
                 Divider()
                 Button { sheet = .inputs } label: { Label("Inputs", systemImage: "rectangle.on.rectangle") }
                 Button { sheet = .apps } label: { Label("All apps", systemImage: "square.grid.2x2") }

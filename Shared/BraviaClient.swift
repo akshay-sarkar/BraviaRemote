@@ -285,8 +285,10 @@ final class BraviaClient {
         try await call("system", "setPowerStatus", params: [["status": on]])
     }
 
-    func systemInfo() async throws -> TVInfo {
-        let result = try await call("system", "getSystemInformation")
+    /// - Parameter allowRenew: false when probing a TV that might not be ours (auto-reconnect),
+    ///   so a saved PIN is never sent to a different TV.
+    func systemInfo(allowRenew: Bool = true) async throws -> TVInfo {
+        let result = try await call("system", "getSystemInformation", allowRenew: allowRenew)
         let info = result.first as? [String: Any] ?? [:]
         return TVInfo(model: info["model"] as? String,
                       name: info["name"] as? String,

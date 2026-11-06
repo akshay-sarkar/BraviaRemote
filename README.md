@@ -43,6 +43,10 @@
 
 | | |
 |---|---|
+| 🗣️ **Siri & Shortcuts** | "Turn off the TV with Bravia Remote". Actions for power, volume, buttons, HDMI and apps. |
+| 🧩 **Widgets & controls** | Interactive Home Screen and Lock Screen widgets, plus Control Center controls on iOS 18. |
+| 🔒 **Lock Screen remote** | Volume, mute, play/pause and power on the Lock Screen and in the Dynamic Island. |
+| 🔁 **Auto‑reconnect** | Finds the TV again if its IP address changes. |
 | 📺 **Multiple TVs** | Pair every BRAVIA in the house and switch by tapping the TV name. |
 | 🔀 **Input picker** | Jump straight to HDMI 1–4, with the names you gave them on the TV. |
 | 🔊 **iPhone volume buttons** | Control the TV volume with your phone's side buttons while the remote is open. |
@@ -151,17 +155,25 @@ https://github.com/<owner>/<repo>/releases/latest/download/BraviaRemote-unsigned
 ## Architecture
 
 ```
+Shared/                           Compiled into the app and the widget extension
+├─ BraviaClient.swift             Sony REST (JSON‑RPC) + IRCC (SOAP), cookie / PSK auth
+├─ PairingConnection.swift        Minimal raw HTTP/1.1 client for the PIN handshake
+├─ RemoteIntents.swift            App Intents: power, buttons, volume, mute, HDMI, open app
+├─ RemoteCommandRunner.swift      Runs commands without UI (Siri, widgets, controls)
+├─ RemoteActivityAttributes.swift Lock Screen remote model + widget colors
+├─ TVStore.swift                  Saved TVs (app group), migrations
+├─ KeychainStore.swift            Keychain in the shared access group
+├─ RemoteKey.swift                Key names + fallback IRCC codes
+└─ AppGroup.swift                 Shared defaults
+BraviaRemoteWidgets/              Widget extension: widgets, Live Activity, Control Center controls
 BraviaRemote/
 ├─ BraviaRemoteApp.swift          App entry · theme injection · setup ↔ remote routing
+├─ AppShortcuts.swift             Siri phrases / Shortcuts tiles
+├─ LiveActivityController.swift   Starts / updates the Lock Screen remote
 ├─ RemoteViewModel.swift          State, serialized command queue, pairing, error handling
 ├─ Services/
-│  ├─ BraviaClient.swift          Sony REST (JSON‑RPC) + IRCC (SOAP), cookie / PSK auth
-│  ├─ PairingConnection.swift     Minimal raw HTTP/1.1 client for the PIN handshake
-│  ├─ TVStore.swift               Saved TVs, active TV, v1.0 → v1.1 migration
 │  ├─ HardwareVolume.swift        iPhone volume buttons → TV volume
-│  ├─ RemoteKey.swift             Key names + fallback IRCC codes
-│  ├─ TVDiscovery.swift           Bonjour (_googlecast._tcp) discovery + IPv4 lookup
-│  └─ KeychainStore.swift         Keychain wrapper
+│  └─ TVDiscovery.swift           Bonjour (_googlecast._tcp) discovery + IPv4 lookup
 ├─ Views/
 │  ├─ RemoteView.swift            Main remote layout + per-screen-size metrics
 │  ├─ Theme.swift                 AppTheme tokens, poster background, themed keys / rockers / D‑pad
@@ -176,6 +188,7 @@ BraviaRemote/
 
 - Key presses go through a **serial queue**, so they reach the TV in order. Commands are dropped while the TV is unreachable, instead of piling up.
 - On connect, the app loads the **TV's own IRCC code table** (`getRemoteControllerInfo`). It falls back to the standard Sony codes only when that fails.
+- Widget, Lock Screen and Control Center buttons use App Intents that adopt `LiveActivityIntent`. iOS then runs them in the app's own process in the background, where the TV pairing and Local Network permission already exist.
 - PIN pairing uses a raw socket instead of `URLSession`, because `URLSession`'s automatic handling of the `401` reply made the TV cancel the PIN pop‑up.
 
 ## Sony REST API reference

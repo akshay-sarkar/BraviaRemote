@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import WidgetKit
 
 @MainActor
 final class RemoteViewModel: ObservableObject {
@@ -27,6 +28,8 @@ final class RemoteViewModel: ObservableObject {
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     private let heavyHaptic = UIImpactFeedbackGenerator(style: .rigid)
     private let nickname: String
+    private var powerObserver: NSObjectProtocol?
+    private var lastReconnectAttempt: Date?
 
     init() {
         nickname = "\(UIDevice.current.name) (Bravia Remote)"
@@ -36,6 +39,48 @@ final class RemoteViewModel: ObservableObject {
         if let tv = stored.tvs.first(where: { $0.id == stored.current }) {
             client = makeClient(for: tv)
         }
+        powerObserver = NotificationCenter.default.addObserver(
+            forName: RemoteSignals.powerChangedNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            let isOn = note.userInfo?["isOn"] as? Bool
+            Task { @MainActor in
+                guard let self, let isOn else { return }
+                self.isOn = isOn
+                self.lockScreenRemoteSync()
+            }
+        }
+    }
+
+    /// Saves the TV list and refreshes widgets, which read it from the app group.
+    private func persist() {
+        TVStore.save(tvs, current: currentID)
+        WidgetCenter.shared.reloadAllTimelines()
+        lockScreenRemoteSync()
+    }
+
+    // MARK: - Lock Screen remote
+
+    var lockScreenRemoteEnabled: Bool {
+        UserDefaults.standard.bool(forKey: LiveActivityController.settingKey)
+    }
+
+    func setLockScreenRemote(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, forKey: LiveActivityController.settingKey)
+        if enabled && !LiveActivityController.isAllowed {
+            show("Turn on Live Activities for Bravia Remote in iOS Settings.")
+        }
+        lockScreenRemoteSync()
+        objectWillChange.send()
+    }
+
+    /// Keeps the Lock Screen remote in step with the setting, the current TV and the theme.
+    func lockScreenRemoteSync() {
+        guard lockScreenRemoteEnabled, let tv = currentTV else {
+            LiveActivityController.end()
+            return
+        }
+        let theme = UserDefaults.standard.string(forKey: AppTheme.storageKey) ?? AppTheme.default.rawValue
+        LiveActivityController.start(tvName: tv.name, theme: theme, isOn: isOn ?? true)
     }
 
     // MARK: - Current TV
@@ -63,7 +108,7 @@ final class RemoteViewModel: ObservableObject {
         apps = []
         isOn = nil
         isReachable = nil
-        TVStore.save(tvs, current: currentID)
+        persist()
         refresh()
     }
 
@@ -71,7 +116,7 @@ final class RemoteViewModel: ObservableObject {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let index = tvs.firstIndex(where: { $0.id == id }) else { return }
         tvs[index].name = trimmed
-        TVStore.save(tvs, current: currentID)
+        persist()
     }
 
     /// Removes a TV and its credentials. Switches to another saved TV if the active one was removed.
@@ -88,7 +133,7 @@ final class RemoteViewModel: ObservableObject {
             isReachable = nil
             if let next = tvs.first { switchTo(next.id) }
         }
-        TVStore.save(tvs, current: currentID)
+        persist()
     }
 
     func forgetTV() {
@@ -103,10 +148,12 @@ final class RemoteViewModel: ObservableObject {
             do {
                 if codes.isEmpty { codes = try await client.remoteControllerCodes() }
                 isOn = try await client.isPoweredOn()
+                if let isOn { AppGroup.defaults.set(isOn, forKey: AppGroup.Key.lastPower) }
                 isReachable = true
             } catch {
                 isReachable = false
                 handle(error, quiet: true)
+                if error is URLError { reconnectIfMoved() }
             }
         }
     }
@@ -167,6 +214,7 @@ final class RemoteViewModel: ObservableObject {
         guard var tv = pendingTV, let newClient = pendingClient else { return }
         if let info = try? await newClient.systemInfo() {
             tv.model = info.model ?? tv.model
+            tv.mac = info.mac ?? tv.mac
             if let name = info.name, tv.name == "BRAVIA" { tv.name = name }
         }
         if let index = tvs.firstIndex(where: { $0.id == tv.id }) {
@@ -186,7 +234,7 @@ final class RemoteViewModel: ObservableObject {
         codes = (try? await newClient.remoteControllerCodes()) ?? [:]
         apps = []
         isReachable = true
-        TVStore.save(tvs, current: currentID)
+        persist()
         showingSetup = false
         heavyHaptic.impactOccurred()
         refresh()
@@ -215,6 +263,8 @@ final class RemoteViewModel: ObservableObject {
                 try await client.send(code: self.codes[key.rawValue] ?? key.fallbackCode)
             }
             self.isOn = !currentlyOn
+            AppGroup.defaults.set(!currentlyOn, forKey: AppGroup.Key.lastPower)
+            LiveActivityController.update(isOn: !currentlyOn)
         }
     }
 
@@ -235,7 +285,7 @@ final class RemoteViewModel: ObservableObject {
 
     /// One-touch app keys. Launches the installed app by name;
     /// Netflix/YouTube fall back to their dedicated IRCC keys.
-    func open(_ shortcut: AppShortcut) {
+    func open(_ shortcut: AppQuickLaunch) {
         lightHaptic.impactOccurred()
         enqueue { [weak self] client in
             guard let self else { return }
@@ -298,6 +348,51 @@ final class RemoteViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Auto-reconnect
+
+    /// The TV stopped answering. If the router gave it a new IP address, find it again on the
+    /// network and confirm it's the same TV (by MAC address, or by name for v1.1 pairings).
+    /// Runs at most once a minute.
+    private func reconnectIfMoved() {
+        guard let tv = currentTV,
+              Date().timeIntervalSince(lastReconnectAttempt ?? .distantPast) > 60 else { return }
+        lastReconnectAttempt = Date()
+
+        Task {
+            let discovery = TVDiscovery()
+            discovery.start()
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            let found = discovery.tvs.sorted { $0.looksLikeBravia && !$1.looksLikeBravia }
+            discovery.stop()
+
+            for candidate in found {
+                guard let ip = await discovery.resolveIPv4(candidate), ip != tv.host else { continue }
+                let probe = BraviaClient(host: ip, clientId: tv.clientId, nickname: nickname,
+                                         credentialScope: tv.credentialScope)
+                guard let info = try? await probe.systemInfo(allowRenew: false) else { continue }
+                let sameMAC = tv.mac != nil && info.mac?.lowercased() == tv.mac?.lowercased()
+                let sameName = tv.mac == nil && (candidate.name == tv.name || info.name == tv.name)
+                if sameMAC || sameName {
+                    moveTV(tv.id, to: ip, mac: info.mac)
+                    return
+                }
+            }
+        }
+    }
+
+    private func moveTV(_ id: UUID, to host: String, mac: String?) {
+        guard let index = tvs.firstIndex(where: { $0.id == id }) else { return }
+        tvs[index].host = host
+        if let mac { tvs[index].mac = mac }
+        persist()
+        if id == currentID {
+            client = makeClient(for: tvs[index])
+            isReachable = true
+            show("Found \(tvs[index].name) at its new address \(host).")
+            refresh()
+        }
+    }
+
     // MARK: - Errors
 
     private func handle(_ error: Error, quiet: Bool = false) {
@@ -310,6 +405,7 @@ final class RemoteViewModel: ObservableObject {
         }
         if error is URLError {
             isReachable = false
+            reconnectIfMoved()
             if !quiet { show("Can't reach \(tvName) at \(host). Is it on the same Wi‑Fi?") }
             return
         }
@@ -339,7 +435,8 @@ final class RemoteViewModel: ObservableObject {
     }
 }
 
-enum AppShortcut: String, CaseIterable, Identifiable {
+/// One-tap app launchers (named so it doesn't clash with AppIntents.AppShortcut).
+enum AppQuickLaunch: String, CaseIterable, Identifiable {
     case youtube = "YouTube"
     case netflix = "Netflix"
     case disney = "Disney+"

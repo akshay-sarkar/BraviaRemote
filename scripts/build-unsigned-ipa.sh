@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Builds an UNSIGNED BraviaRemote.ipa (for Sideloadly / AltStore / other re-signers).
+# Builds BraviaRemote-unsigned.ipa for Sideloadly / AltStore / other re-signers.
+# It isn't signed with any developer certificate; it only carries an ad-hoc signature
+# so the entitlements travel with it.
 # Requires macOS with Xcode 16+.
 #
 # Optional environment variables:
@@ -32,6 +34,17 @@ xcodebuild \
 
 APP="$BUILD/Release-iphoneos/BraviaRemote.app"
 [ -d "$APP" ] || { echo "error: $APP not found" >&2; exit 1; }
+
+# Embed the entitlements (app group for widgets, Siri and Control Center) with an
+# ad-hoc signature. Sideloadly / AltStore read them from here when they re-sign
+# the app with your Apple ID. Without this, widgets can't see your paired TVs.
+APPEX="$APP/PlugIns/BraviaRemoteWidgets.appex"
+if [ -d "$APPEX" ]; then
+  codesign --force --sign - --timestamp=none --entitlements BraviaRemoteWidgets.entitlements "$APPEX"
+fi
+codesign --force --sign - --timestamp=none --entitlements BraviaRemote.entitlements "$APP"
+echo "Embedded entitlements:"
+codesign -d --entitlements - "$APP" 2>/dev/null || true
 
 mkdir -p "$BUILD/Payload"
 cp -R "$APP" "$BUILD/Payload/"

@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 
 // MARK: - Apps
@@ -18,7 +19,7 @@ struct AppsView: View {
         NavigationStack {
             ScrollView {
                 HStack(spacing: 8) {
-                    ForEach(AppShortcut.allCases) { shortcut in
+                    ForEach(AppQuickLaunch.allCases) { shortcut in
                         quickLaunch(shortcut.rawValue) { vm.open(shortcut) }
                     }
                 }
@@ -338,6 +339,32 @@ struct SettingsView: View {
                     Text("TVs")
                 } footer: {
                     Text("Tap a TV to switch to it. Swipe left to rename or remove it.")
+                }
+
+                Section {
+                    Toggle(isOn: Binding(get: { vm.lockScreenRemoteEnabled },
+                                         set: { vm.setLockScreenRemote($0) })) {
+                        Label("Lock Screen remote", systemImage: "lock.iphone")
+                    }
+                } footer: {
+                    Text("Shows power, volume, mute and play/pause on the Lock Screen and in the Dynamic Island.")
+                }
+
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Try saying:").font(.subheadline.weight(.semibold))
+                        Text("“Turn off the TV with Bravia Remote”")
+                        Text("“Mute the TV with Bravia Remote”")
+                        Text("“Switch the TV to HDMI 2 with Bravia Remote”")
+                    }
+                    .font(.footnote)
+                    .padding(.vertical, 2)
+                    ShortcutsLink()
+                        .shortcutsLinkStyle(.automaticOutline)
+                } header: {
+                    Text("Siri & Shortcuts")
+                } footer: {
+                    Text("Add the TV Remote and TV Power widgets from the Home Screen, and TV Power / Mute TV controls to Control Center (iOS 18).")
                 }
 
                 Section {

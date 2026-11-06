@@ -112,7 +112,7 @@ struct KeyboardSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Select a search box on the TV first, then type — or tap the 🎤 on the iPhone keyboard to dictate.")
+                Text("Select a search box on the TV so its on‑screen keyboard is showing, then type here, or tap the 🎤 on the iPhone keyboard to dictate.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
@@ -135,6 +135,10 @@ struct KeyboardSheet: View {
                     Button { vm.press(.back) } label: { Label("Back", systemImage: "arrow.uturn.backward") }
                         .buttonStyle(.bordered)
                 }
+                Label("YouTube and a few other apps use their own keyboard, which can't be typed into from a phone. In those apps, use the D‑pad on their keyboard or the TV remote's voice button.",
+                      systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Spacer()
             }
             .padding()

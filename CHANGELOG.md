@@ -3,6 +3,12 @@
 All notable changes to Bravia Remote are listed here. Versions follow [Semantic Versioning](https://semver.org).
 Each release on GitHub uses its section from this file as its release notes.
 
+## [1.2.1] — 2026-11-06
+
+### 🐞 Bug fixes
+- **Voice & Type:** text is now sent with the newer TV command that Google TV BRAVIAs expect, with a fallback for older models, so search boxes that use the TV's built‑in keyboard accept typing.
+- **Voice & Type:** typing into an app that draws its own keyboard (such as YouTube's search) now shows a clear explanation instead of "TV error 7: Illegal State". The Voice & Type screen also mentions this.
+
 ## [1.2.0] — 2026-11-05
 
 ### ✨ New features

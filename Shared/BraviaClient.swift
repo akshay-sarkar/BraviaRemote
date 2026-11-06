@@ -9,6 +9,7 @@ enum BraviaError: LocalizedError {
     case http(Int)
     case api(code: Int, message: String)
     case invalidResponse
+    case noTextField
 
     var errorDescription: String? {
         switch self {
@@ -22,6 +23,8 @@ enum BraviaError: LocalizedError {
         case .http(let code): return "TV returned HTTP \(code)."
         case .api(let code, let message): return "TV error \(code)\(message.isEmpty ? "" : ": \(message)")."
         case .invalidResponse: return "Unexpected response from the TV."
+        case .noTextField:
+            return "The TV isn't showing a text box it can type into. Open the search box first. YouTube and some other apps use their own keyboard, which can't be typed into from a phone (TV error 7)."
         }
     }
 }
@@ -337,8 +340,23 @@ final class BraviaClient {
     }
 
     /// Types into the TV's on-screen keyboard (a text field must be focused on the TV).
+    ///
+    /// Android/Google TV BRAVIAs expect version 1.1 (`{"text": …}`); older models only have 1.0.
+    /// Error 7 ("Illegal State") means no system text field is focused. Apps such as YouTube
+    /// draw their own keyboard, which the TV's IP-control API can't type into.
     func sendText(_ text: String) async throws {
-        try await call("appControl", "setTextForm", params: [text])
+        do {
+            try await call("appControl", "setTextForm", params: [["text": text]], version: "1.1")
+        } catch BraviaError.api(let code, _) where code == 12 || code == 14 {
+            // 12 = no such method, 14 = unsupported version → fall back to 1.0
+            do {
+                try await call("appControl", "setTextForm", params: [text], version: "1.0")
+            } catch BraviaError.api(let code, _) where code == 7 {
+                throw BraviaError.noTextField
+            }
+        } catch BraviaError.api(let code, _) where code == 7 {
+            throw BraviaError.noTextField
+        }
     }
 
     @discardableResult

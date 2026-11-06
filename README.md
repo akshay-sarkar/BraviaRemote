@@ -23,6 +23,7 @@
 
 - [Features](#features)
 - [Themes](#themes)
+- [Voice control & Lock Screen remote](#voice-control--lock-screen-remote)
 - [Requirements](#requirements)
 - [Install](#install)
 - [TV setup](#tv-setup)
@@ -74,6 +75,41 @@
 </table>
 
 Switch themes from **⋯ → Theme**, or in **⋯ → More keys & settings**. The app remembers your choice.
+
+## Voice control & Lock Screen remote
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/screenshots/siri-voice-command.png" width="260" alt="Siri voice command turning the TV off"><br><b>Siri & Shortcuts</b></td>
+    <td align="center" width="50%"><img src="docs/screenshots/lock-screen-remote.png" width="260" alt="Lock Screen remote with Dynamic Island"><br><b>Lock Screen remote</b></td>
+  </tr>
+  <tr>
+    <td valign="top">
+
+Control the TV hands‑free. Siri runs the command in the background, without opening the app.
+
+- “Turn **on** / **off** the TV with Bravia Remote”
+- “Mute the TV with Bravia Remote”
+- “Turn up the TV with Bravia Remote”
+- “Switch the TV to **HDMI 2** with Bravia Remote”
+- “Bravia Remote **Home**” (any remote button)
+
+All of these are also **Shortcuts actions**, so you can run them from automations (e.g. TV off at midnight) or the **Action button**.
+
+</td>
+    <td valign="top">
+
+Turn on **⋯ → Lock Screen remote** to get the TV's power, volume, mute and play/pause on the Lock Screen and in the **Dynamic Island**. No unlocking needed.
+
+Also in v1.2:
+
+- **Home Screen widgets:** *TV Remote* (small / medium) and *TV Power*
+- **Control Center controls (iOS 18):** *TV Power* and *Mute TV*
+- Everything uses your theme's colors
+
+</td>
+  </tr>
+</table>
 
 ## Requirements
 
